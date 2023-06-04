@@ -1,0 +1,12 @@
+torch
+torchaudio
+pandas
+protobuf
+numpy
+opencv-python
+dxcam
+omegaconf
+pywin32
+pytesseract
+pillow
+simpleaudio
