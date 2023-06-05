@@ -155,7 +155,7 @@ def process_frame(frame, action_lock, fish_found_lock, saved_image_lock, stats_l
   fish_name = fish_finder(frame)
   if (fish_name):
     current_time = datetime.now()
-    if (last_found_time == None or (current_time - last_found_time).total_seconds() > 10):
+    if (last_found_time == None or (current_time - last_found_time).total_seconds() > 8):
       print(fish_name)
 
 
