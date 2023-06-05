@@ -65,6 +65,7 @@ mouse = MouseController()
 action_lock = Lock()
 fish_found_lock = Lock()
 saved_image_lock = Lock()
+stats_lock = Lock()
 
 last_found_fish: str = None
 last_found_time: datetime = None
@@ -129,7 +130,7 @@ def fish_finder(image_np, threshold=165):
           pass
     return None
 
-def process_frame(frame, action_lock, fish_found_lock, saved_image_lock):
+def process_frame(frame, action_lock, fish_found_lock, saved_image_lock, stats_lock):
   global last_found_fish
   global last_found_time
   global last_saved_fish
@@ -137,6 +138,7 @@ def process_frame(frame, action_lock, fish_found_lock, saved_image_lock):
 
   # if (GetWindowText(GetForegroundWindow()) != SOT_WINDOW_NAME):
   #   continue;
+  function_start_time = datetime.now()
   fish_name = fish_finder(frame)
   if (fish_name):
     current_time = datetime.now()
@@ -179,6 +181,13 @@ def process_frame(frame, action_lock, fish_found_lock, saved_image_lock):
           recast()
           action_lock.release()
 
+      # update stats
+      stats_lock.acquire()
+      # append to the stats file
+      with open("stats.csv", "a") as stats_file:
+        stats_file.write(f"{function_start_time.strftime('%Y-%m-%d %H:%M:%S')},{current_time.strftime('%Y-%m-%d %H:%M:%S')},{fish_name}\n")
+      stats_lock.release()
+
   # with Image.fromarray(frame) as img:
   #   img.thumbnail((1280, 1280), Image.LANCZOS)
   #   img.save("test.jpg")
@@ -193,7 +202,7 @@ def main():
       try:
         frame = camera.get_latest_frame()
         #process_frame(frame, action_lock, fish_lock)
-        th = Thread(target = process_frame, args = (frame, action_lock, fish_found_lock, saved_image_lock))
+        th = Thread(target = process_frame, args = (frame, action_lock, fish_found_lock, saved_image_lock, stats_lock))
         th.start()
       except KeyboardInterrupt:
         break
