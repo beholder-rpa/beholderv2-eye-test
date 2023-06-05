@@ -42,6 +42,19 @@ s_tier_fish_prefixes = [
     "Shadow",
 ]
 
+fish_pattern = re.compile(f"^\s*(?P<fish_name>(?P<is_trophy>Trophy)?\s*(" \
+                              "(?P<splashtail>(?P<splashtail_prefix>Ruby|Sunny|Indigo|Umber|Seafoam)\s+?Splashtail)|" \
+                              "(?P<pondie>(?P<pondie_prefix>Charcoal|Orchid|Bronze|Bright|Moonsky)\s+?Pondie)|" \
+                              "(?P<islehopper>(?P<islehopper_prefix>Stone|Moss|Honey|Raven|Amethyst)\s+?Islehopper)|" \
+                              "(?P<ancientscale>(?P<ancientscale_prefix>Almond|Sapphire|Smoke|Bone|Starshine)\s+?Ancientscale)|" \
+                              "(?P<plentifin>(?P<plentifin_prefix>Olive|Amber|Cloudy|Bonedust|Watery)\s+?Plentifin)|" \
+                              "(?P<wildsplash>(?P<wildsplash_prefix>Russet|Sandy|Ocean|Muddy|Coral)\s+Wildsplash)|" \
+                              "(?P<devilfish>(?P<devilfish_prefix>Ashen|Seashell|Lava|Forsaken|Firelight)\s+?Devilfish)|" \
+                              "(?P<battlegill>(?P<battlegill_prefix>Jade|Sky|Rum|Sand|Bittersweet)\s+?Battlegill)|" \
+                              "(?P<wrecker>(?P<wrecker_prefix>Rose|Sun|Blackcloud|Snow|Moon)\s+Wrecker)|" \
+                              "(?P<stormfish>(?P<stormfish_prefix>Ancient|Shores|Wild|Shadow|Twilight)\s+Stormfish)" \
+                              "))\s*$", re.IGNORECASE)
+
 
 alert = sa.WaveObject.from_wave_file(os.path.dirname(__file__) + '\\sounds\\fanfare.wav')
 error = sa.WaveObject.from_wave_file(os.path.dirname(__file__) + '\\sounds\\error.wav')
@@ -87,18 +100,18 @@ def fish_finder(image_np, threshold=165):
     for (x,y,w,h) in textAreas:
       # get the text from the image
       crop = invert[y:y+h, x:x+w]
-      
+
       try:
         text = pytesseract.image_to_string(Image.fromarray(crop), timeout=0.20, config='--psm 7') # Timeout after half a second , config="--psm 7"
         text = text.strip()
         if (text != ""):
-          for fish in sot_fish:
-            # use a regex to find the fish name in the text
-            match = re.search(f"(?P<fish_name>(Trophy\s)?\w+\s{fish})", text, re.IGNORECASE)
-            if match:
-              fish_name = match.group('fish_name')
-              cv2.imwrite("./test-contour.jpg", crop)
-              return fish_name
+          # use the fish pattern to find the fish name
+          match = fish_pattern.match(text)
+          if match:
+            fish_name = match.group('fish_name')
+            #cv2.imwrite("./test-contour.jpg", crop)
+            return fish_name
+            
       except RuntimeError as timeout_error:
           print("fish_finder: caught exception RuntimeError: " + str(timeout_error) )
           # Tesseract processing is terminated
