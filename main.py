@@ -29,18 +29,30 @@ sot_fish = [
     "Stormfish",
 ]
 
-s_tier_fish_prefixes = [
-    "Umber",
-    "Bright",
-    "Raven",
-    "Bone",
-    "Bonedust",
-    "Muddy",
-    "Forsaken",
-    "Sand",
-    "Snow",
-    "Blackcloud",
-    "Shadow",
+keepers = [
+    "Umber Splashtail",
+    "Bright Pondie",
+    "Raven Islehopper",
+    "Bone Ancientscale",
+    "Bonedust Plentifin",
+    "Muddy Wildsplash",
+    "Forsaken Devilfish",
+    "Jade Battlegill",
+    "Sky Battlegill",
+    "Rum Battlegill",
+    "Sand Battlegill",
+    "Bittersweet Battlegill",
+    "Snow Wrecker",
+    "Blackcloud Wrecker",
+    "Moon Wrecker",
+    "Ancient Stormfish",
+    "Wild Stormfish",
+    "Shadow Stormfish",
+    "Twilight Stormfish",
+    "Old Boot",
+    "Old Hat",
+    "Old Skull",
+    "Fish Bones",
 ]
 
 fish_pattern = re.compile(f"^\s*(?P<fish_name>(?P<is_trophy>Trophy)?\s*(" \
@@ -53,7 +65,8 @@ fish_pattern = re.compile(f"^\s*(?P<fish_name>(?P<is_trophy>Trophy)?\s*(" \
                               "(?P<devilfish>(?P<devilfish_prefix>Ashen|Seashell|Lava|Forsaken|Firelight)\s+?Devilfish)|" \
                               "(?P<battlegill>(?P<battlegill_prefix>Jade|Sky|Rum|Sand|Bittersweet)\s+?Battlegill)|" \
                               "(?P<wrecker>(?P<wrecker_prefix>Rose|Sun|Blackcloud|Snow|Moon)\s+Wrecker)|" \
-                              "(?P<stormfish>(?P<stormfish_prefix>Ancient|Shores|Wild|Shadow|Twilight)\s+Stormfish)" \
+                              "(?P<stormfish>(?P<stormfish_prefix>Ancient|Shores|Wild|Shadow|Twilight)\s+Stormfish)|" \
+                              "(?P<plunder>(Fish Bones|Old Hat|Old Boot|Old Skull))"
                               "))\s*$", re.IGNORECASE)
 
 
@@ -168,8 +181,8 @@ def process_frame(frame, action_lock, fish_found_lock, saved_image_lock, stats_l
 
       # If the fish is not a tier 5 fish, recast
       s_tier_fish = False
-      for prefix in s_tier_fish_prefixes:
-        if (re.search(f"\s*{prefix}\s+", fish_name, re.IGNORECASE)):
+      for keeper in keepers:
+        if (re.search(f"\s*{keeper}\s+", fish_name, re.IGNORECASE)):
           s_tier_fish = True
           break
       
