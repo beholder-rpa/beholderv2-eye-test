@@ -185,7 +185,7 @@ def process_frame(frame, action_lock, fish_found_lock, saved_image_lock, stats_l
       stats_lock.acquire()
       # append to the stats file
       with open("stats.csv", "a") as stats_file:
-        stats_file.write(f"{function_start_time.strftime('%Y-%m-%d %H:%M:%S')},{current_time.strftime('%Y-%m-%d %H:%M:%S')},{fish_name}\n")
+        stats_file.write(f"{function_start_time.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]},{current_time.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]},{fish_name}\n")
       stats_lock.release()
 
   # with Image.fromarray(frame) as img:
