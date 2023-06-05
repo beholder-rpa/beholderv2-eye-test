@@ -35,7 +35,7 @@ s_tier_fish_prefixes = [
     "Bone",
     "Bonedust",
     "Muddy",
-    "Foresaken",
+    "Forsaken",
     "Sand",
     "Snow",
     "Blackcloud",
