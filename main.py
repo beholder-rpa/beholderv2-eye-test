@@ -182,7 +182,7 @@ def process_frame(frame, action_lock, fish_found_lock, saved_image_lock, stats_l
       # If the fish is not a tier 5 fish, recast
       s_tier_fish = False
       for keeper in keepers:
-        if (re.search(f"\s*{keeper}\s+", fish_name, re.IGNORECASE)):
+        if (re.search(f"\s*{keeper}\s*", fish_name, re.IGNORECASE)):
           s_tier_fish = True
           break
       
