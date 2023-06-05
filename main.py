@@ -1,4 +1,5 @@
 from win32gui import GetWindowText, GetForegroundWindow
+from threading import Thread, Lock
 from PIL import Image
 import dxcam
 import simpleaudio as sa
@@ -61,6 +62,16 @@ error = sa.WaveObject.from_wave_file(os.path.dirname(__file__) + '\\sounds\\erro
 keyboard = KeyboardController()
 mouse = MouseController()
 
+action_lock = Lock()
+fish_found_lock = Lock()
+saved_image_lock = Lock()
+
+last_found_fish: str = None
+last_found_time: datetime = None
+
+last_saved_fish: str = None
+last_saved_time: datetime = None
+
 def recast():
   mouse.click(Button.right, 1)
   
@@ -118,53 +129,72 @@ def fish_finder(image_np, threshold=165):
           pass
     return None
 
+def process_frame(frame, action_lock, fish_found_lock, saved_image_lock):
+  global last_found_fish
+  global last_found_time
+  global last_saved_fish
+  global last_saved_time
+
+  # if (GetWindowText(GetForegroundWindow()) != SOT_WINDOW_NAME):
+  #   continue;
+  fish_name = fish_finder(frame)
+  if (fish_name):
+    current_time = datetime.now()
+    if (last_found_time == None or (current_time - last_found_time).total_seconds() > 10):
+      print(fish_name)
+
+
+      # double-check lock pattern
+      if (last_found_time == None or last_found_time < current_time):
+        fish_found_lock.acquire()
+        if (last_found_time == None or last_found_time < current_time):
+          last_found_time = current_time
+          last_found_fish = fish_name
+        fish_found_lock.release()
+
+      #if (fish_name != last_saved_fish and (last_saved_time == None or (current_time - last_saved_time).total_seconds() > 30)):
+        # with Image.fromarray(frame) as img:
+        #   filename = f"./fish_images/{fish_name}_{current_time.strftime('%Y%m%d-%H%M%S')}.jpg"
+        #   img.save(filename)
+      
+      if (last_saved_time == None or last_saved_time < current_time):
+        saved_image_lock.acquire()
+        if (last_saved_time == None or last_saved_time < current_time):
+          last_saved_fish = fish_name
+          last_saved_time = current_time
+        saved_image_lock.release()
+
+      # If the fish is not a tier 5 fish, recast
+      s_tier_fish = False
+      for prefix in s_tier_fish_prefixes:
+        if (re.search(f"\s*{prefix}\s+", fish_name, re.IGNORECASE)):
+          s_tier_fish = True
+          break
+      
+      if (s_tier_fish):
+        alert.play()
+      else:
+        error.play()
+        if (action_lock.acquire(blocking=False)):
+          recast()
+          action_lock.release()
+
+  # with Image.fromarray(frame) as img:
+  #   img.thumbnail((1280, 1280), Image.LANCZOS)
+  #   img.save("test.jpg")
+
 def main():
   target_fps = 4
   print(dxcam.device_info())
   camera = dxcam.create(output_idx=0)
   camera.start(target_fps=target_fps, video_mode=False)
 
-  last_found_fish: str = None
-  last_found_time: datetime = None
-
-  last_saved_fish: str = None
-  last_saved_time: datetime = None
-
   while True:
       try:
         frame = camera.get_latest_frame()
-        # if (GetWindowText(GetForegroundWindow()) != SOT_WINDOW_NAME):
-        #   continue;
-        fish_name = fish_finder(frame)
-        if (fish_name):
-          current_time = datetime.now()
-          if (last_found_time == None or (current_time - last_found_time).total_seconds() > 10):
-            print(fish_name)
-            last_found_fish = fish_name
-            last_found_time = current_time
-            # If the fish is not a tier 5 fish, recast
-            s_tier_fish = False
-            for prefix in s_tier_fish_prefixes:
-              if (re.search(f"\s*{prefix}\s+", fish_name, re.IGNORECASE)):
-                s_tier_fish = True
-                break
-            
-            if (s_tier_fish):
-              alert.play()
-            else:
-              error.play()
-              recast()
-
-          if (fish_name != last_saved_fish and (last_saved_time == None or (current_time - last_saved_time).total_seconds() > 30)):
-            last_saved_fish = fish_name
-            last_saved_time = current_time
-            with Image.fromarray(frame) as img:
-              filename = f"./fish_images/{fish_name}_{current_time.strftime('%Y%m%d-%H%M%S')}.jpg"
-              img.save(filename)
-            
-        # with Image.fromarray(frame) as img:
-        #   img.thumbnail((1280, 1280), Image.LANCZOS)
-        #   img.save("test.jpg")
+        #process_frame(frame, action_lock, fish_lock)
+        th = Thread(target = process_frame, args = (frame, action_lock, fish_found_lock, saved_image_lock))
+        th.start()
       except KeyboardInterrupt:
         break
       except Exception as e:
