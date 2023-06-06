@@ -54,6 +54,7 @@ keepers = [
     "Old Hat",
     "Old Skull",
     "Fish Bones",
+    "Ashen Key",
 ]
 
 fish_pattern = re.compile(f"^\s*(?P<fish_name>(?P<is_trophy>Trophy)?\s*(" \
@@ -67,7 +68,7 @@ fish_pattern = re.compile(f"^\s*(?P<fish_name>(?P<is_trophy>Trophy)?\s*(" \
                               "(?P<battlegill>(?P<battlegill_prefix>Jade|Sky|Rum|Sand|Bittersweet)\s+?Battlegill)|" \
                               "(?P<wrecker>(?P<wrecker_prefix>Rose|Sun|Blackcloud|Snow|Moon)\s+Wrecker)|" \
                               "(?P<stormfish>(?P<stormfish_prefix>Ancient|Shores|Wild|Shadow|Twilight)\s+Stormfish)|" \
-                              "(?P<plunder>(Fish Bones|Old Hat|Old Boot|Old Skull))"
+                              "(?P<plunder>(Fish Bones|Old Hat|Old Boot|Old Skull|Ashen Key))" \
                               "))\s*$", re.IGNORECASE)
 
 
