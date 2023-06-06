@@ -11,6 +11,7 @@ from time import sleep
 from datetime import datetime
 import re
 import random
+import argparse
 from pynput.keyboard import Key, Controller as KeyboardController
 from pynput.mouse import Button, Controller as MouseController
 
@@ -103,20 +104,26 @@ def fish_finder(image_np, threshold=165):
     # dialate the image to find clusters of pixels
     kernel = np.ones((15,15),np.uint8)
     dialate = cv2.dilate(thresh,kernel,iterations = 1)
-
     
     textAreas = []
-    contours,hierarchy = cv2.findContours(dialate, 1, 2)
-    for cnt in contours:
-      x,y,w,h = cv2.boundingRect(cnt)
+    contours, _ = cv2.findContours(dialate, 1, 2)
+    for contour in contours:
+      x,y,w,h = cv2.boundingRect(contour)
       
       # if the area is greater than 8% of the image, skip it
       if (w*h > image_np.shape[0]*image_np.shape[1]*0.08):
         continue
 
-      if h > 40 and w > 150 and w > 3*h:
+      # if the aspect ratio is less than 1:2, skip it
+      if (w/h < 2):
+        continue
+
+      if h > 0.025*image_np.shape[0] and w > 0.04*image_np.shape[1]:
         textAreas.append((x,y,w,h))
  
+    if (len(textAreas) == 0):
+      return None
+    
     invert = cv2.bitwise_not(thresh)
 
     # sort the text areas by area
@@ -143,7 +150,7 @@ def fish_finder(image_np, threshold=165):
           pass
     return None
 
-def process_frame(frame, action_lock, fish_found_lock, saved_image_lock, stats_lock):
+def process_frame(frame, action_lock, fish_found_lock, saved_image_lock, stats_lock, save_image):
   global last_found_fish
   global last_found_time
   global last_saved_fish
@@ -167,10 +174,10 @@ def process_frame(frame, action_lock, fish_found_lock, saved_image_lock, stats_l
           last_found_fish = fish_name
         fish_found_lock.release()
 
-      #if (fish_name != last_saved_fish and (last_saved_time == None or (current_time - last_saved_time).total_seconds() > 30)):
-        # with Image.fromarray(frame) as img:
-        #   filename = f"./fish_images/{fish_name}_{current_time.strftime('%Y%m%d-%H%M%S')}.jpg"
-        #   img.save(filename)
+      if (save_image and fish_name != last_saved_fish and (last_saved_time == None or (current_time - last_saved_time).total_seconds() > 30)):
+        with Image.fromarray(frame) as img:
+          filename = f"./fish_images/{fish_name}_{current_time.strftime('%Y%m%d-%H%M%S')}.jpg"
+          img.save(filename)
       
       if (last_saved_time == None or last_saved_time < current_time):
         saved_image_lock.acquire()
@@ -206,16 +213,23 @@ def process_frame(frame, action_lock, fish_found_lock, saved_image_lock, stats_l
   #   img.save("test.jpg")
 
 def main():
-  target_fps = 4
+  parser = argparse.ArgumentParser()
+  parser.add_argument("-s", "--save-images",
+                      help="save images of fish caught",
+                      action="store_true")
+  parser.add_argument("-f", "--target-fps", type=int,
+                      help="target fps", default=4)
+  args = parser.parse_args()
+
   print(dxcam.device_info())
   camera = dxcam.create(output_idx=0)
-  camera.start(target_fps=target_fps, video_mode=False)
+  camera.start(target_fps=args.target_fps, video_mode=False)
 
   while True:
       try:
         frame = camera.get_latest_frame()
         #process_frame(frame, action_lock, fish_lock)
-        th = Thread(target = process_frame, args = (frame, action_lock, fish_found_lock, saved_image_lock, stats_lock))
+        th = Thread(target = process_frame, args = (frame, action_lock, fish_found_lock, saved_image_lock, stats_lock, args.save_images))
         th.start()
       except KeyboardInterrupt:
         break
