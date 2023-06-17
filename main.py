@@ -98,7 +98,7 @@ def recast():
   sleep(delay)
   mouse.release(Button.left)
 
-def fish_finder(image_np, threshold=165, timeout=0.20):
+def fish_finder(image_np, threshold=165):
     _,thresh = cv2.threshold(image_np,threshold,255,0)
     thresh = cv2.cvtColor(thresh, cv2.COLOR_BGR2GRAY)
 
@@ -148,7 +148,7 @@ def fish_finder(image_np, threshold=165, timeout=0.20):
       region.save(f"./test-contour-{i}.jpg")
 
       try:
-        text = pytesseract.image_to_string(region, timeout=timeout, config='--psm 7')
+        text = pytesseract.image_to_string(region, timeout=0.20, config='--psm 7')
         text = text.strip()
         if (text != ""):
           # use the fish pattern to find the fish name
