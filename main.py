@@ -98,7 +98,7 @@ def recast():
   sleep(delay)
   mouse.release(Button.left)
 
-def fish_finder(image_np, threshold=165):
+def fish_finder(image_np, threshold=200, timeout=0.20):
     _,thresh = cv2.threshold(image_np,threshold,255,0)
     thresh = cv2.cvtColor(thresh, cv2.COLOR_BGR2GRAY)
 
@@ -124,8 +124,11 @@ def fish_finder(image_np, threshold=165):
       if r < 0.1 or r > 0.3:
         continue
 
-      # constrain the area to be between 3%  of the image height and 4% and 30% of the image width
+      # constrain the area to be between 3% of the image height and 4% and 30% of the image width
       if h < 0.03*image_np.shape[0] or w < 0.0475 * image_np.shape[1]:
+        continue
+
+      if h > 0.04*image_np.shape[0]:
         continue
       
       textAreas.append((x,y,w,h))
@@ -148,7 +151,7 @@ def fish_finder(image_np, threshold=165):
       region.save(f"./test-contour-{i}.jpg")
 
       try:
-        text = pytesseract.image_to_string(region, timeout=0.20, config='--psm 7')
+        text = pytesseract.image_to_string(region, timeout=timeout, config='--psm 7')
         text = text.strip()
         if (text != ""):
           # use the fish pattern to find the fish name
@@ -171,7 +174,7 @@ def fish_finder(image_np, threshold=165):
           pass
     return None
 
-def process_frame(frame, action_lock, fish_found_lock, saved_image_lock, stats_lock, save_image):
+def process_frame(frame, action_lock, fish_found_lock, saved_image_lock, stats_lock, save_image, target_fps=4, play_error_sound=True):
   global last_found_fish
   global last_found_time
   global last_saved_fish
@@ -180,7 +183,7 @@ def process_frame(frame, action_lock, fish_found_lock, saved_image_lock, stats_l
   # if (GetWindowText(GetForegroundWindow()) != SOT_WINDOW_NAME):
   #   continue;
   function_start_time = datetime.now()
-  fish_name = fish_finder(frame)
+  fish_name = fish_finder(frame, timeout=(60/target_fps)/60)
   if (fish_name):
     current_time = datetime.now()
     if (last_found_time == None or (current_time - last_found_time).total_seconds() > 8):
@@ -217,7 +220,8 @@ def process_frame(frame, action_lock, fish_found_lock, saved_image_lock, stats_l
       if (s_tier_fish):
         alert.play()
       else:
-        error.play()
+        if (play_error_sound):
+          error.play()
         if (action_lock.acquire(blocking=False)):
           recast()
           action_lock.release()
@@ -240,24 +244,37 @@ def main():
                       action="store_true")
   parser.add_argument("-f", "--target-fps", type=int,
                       help="target fps", default=4)
+  parser.add_argument("-n", "--no-error-sound",
+                      action="store_true")
   args = parser.parse_args()
 
   print(dxcam.device_info())
   camera = dxcam.create(output_idx=0)
   camera.start(target_fps=args.target_fps, video_mode=False)
 
+  print(f"Target FPS: {args.target_fps} ({60/args.target_fps/60:.2f} seconds per frame)  ")
+  if (args.save_images):
+    print("Saving images of fish caught")
+  if (args.no_error_sound):
+    print("Suppressing error sound when a fish is rejected")
+  print("Press Ctrl+C to exit...")
+
   while True:
       try:
         frame = camera.get_latest_frame()
-        process_frame(frame, action_lock, fish_found_lock, saved_image_lock, stats_lock, args.save_images)
+        process_frame(frame, action_lock, fish_found_lock, saved_image_lock, stats_lock, args.save_images, target_fps=args.target_fps, play_error_sound=not args.no_error_sound)
         #th = Thread(target = process_frame, args = (frame, action_lock, fish_found_lock, saved_image_lock, stats_lock, args.save_images))
         #th.start()
       except KeyboardInterrupt:
-        break
+        print("Exiting...")
+        try:
+          camera.stop()
+        except:
+          pass
+        exit()
       except Exception as e:
         print(e)
         continue
-  camera.stop()
 
 if __name__ == "__main__":
   main()
