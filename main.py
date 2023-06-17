@@ -88,6 +88,8 @@ last_found_time: datetime = None
 last_saved_fish: str = None
 last_saved_time: datetime = None
 
+debug = False
+
 def recast():
   mouse.click(Button.right, 1)
   
@@ -98,7 +100,7 @@ def recast():
   sleep(delay)
   mouse.release(Button.left)
 
-def fish_finder(image_np, threshold=200, timeout=0.20):
+def fish_finder(image_np, threshold=165, timeout=0.20):
     _,thresh = cv2.threshold(image_np,threshold,255,0)
     thresh = cv2.cvtColor(thresh, cv2.COLOR_BGR2GRAY)
 
@@ -147,8 +149,9 @@ def fish_finder(image_np, threshold=200, timeout=0.20):
       crop = invert[y:y+h, x:x+w]
       region = Image.fromarray(crop)
 
-      # Save the region
-      region.save(f"./test-contour-{i}.jpg")
+      # Save the contour image for debugging
+      if (debug):
+        region.save(f"./test-contour-{i}.jpg")
 
       try:
         text = pytesseract.image_to_string(region, timeout=timeout, config='--psm 7')
@@ -160,10 +163,11 @@ def fish_finder(image_np, threshold=200, timeout=0.20):
             fish_name = match.group('fish_name')
             
             # Output the percentage of the the width and height of the image relative to the whole image
-            print(f"width: {w/image_np.shape[1]:.4f}, height: {h/image_np.shape[0]:.4f}")
-            # determine the ratio of non-zero pixels in the filled region
-            r = float(cv2.countNonZero(thresh[y:y+h,x:x+w])) / (w * h)
-            print(r)
+            if (debug):
+              print(f"width: {w/image_np.shape[1]:.4f}, height: {h/image_np.shape[0]:.4f}")
+              # determine the ratio of non-zero pixels in the filled region
+              r = float(cv2.countNonZero(thresh[y:y+h,x:x+w])) / (w * h)
+              print(r)
       
             #cv2.imwrite("./test-contour.jpg", crop)
             return fish_name
@@ -246,6 +250,8 @@ def main():
                       help="target fps", default=4)
   parser.add_argument("-n", "--no-error-sound",
                       action="store_true")
+  parser.add_argument("-d", "--debug",
+                      action="store_true")
   args = parser.parse_args()
 
   print(dxcam.device_info())
@@ -257,6 +263,8 @@ def main():
     print("Saving images of fish caught")
   if (args.no_error_sound):
     print("Suppressing error sound when a fish is rejected")
+  if (args.debug):
+    print("Debugging mode enabled")
   print("Press Ctrl+C to exit...")
 
   while True:
