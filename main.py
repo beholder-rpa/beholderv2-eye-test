@@ -45,7 +45,7 @@ keepers = [
     "Bittersweet Battlegill",
     "Snow Wrecker",
     "Blackcloud Wrecker",
-    "Moon Wrecker",
+    #"Moon Wrecker",
     "Ancient Stormfish",
     "Wild Stormfish",
     "Shadow Stormfish",
@@ -103,7 +103,7 @@ def fish_finder(image_np, threshold=165):
     _,thresh = cv2.threshold(img_grey,threshold,255,0)
 
     # dialate the image to find clusters of pixels
-    kernel = np.ones((15,15),np.uint8)
+    kernel = np.ones((20,20),np.uint8)
     dialate = cv2.dilate(thresh,kernel,iterations = 1)
     
     textAreas = []
@@ -116,11 +116,19 @@ def fish_finder(image_np, threshold=165):
         continue
 
       # if the aspect ratio is less than 1:2, skip it
-      if (w/h < 2):
+      #if (w/h < 2):
+      #  continue
+
+      # determine the ratio of non-zero pixels in the filled region
+      r = float(cv2.countNonZero(thresh[y:y+h,x:x+w])) / (w * h)
+      if r < 0.1 or r > 0.3:
         continue
 
-      if h > 0.025*image_np.shape[0] and w > 0.04*image_np.shape[1]:
-        textAreas.append((x,y,w,h))
+      # constrain the area to be between 3%  of the image height and 4% and 30% of the image width
+      if h < 0.03*image_np.shape[0] or w < 0.0475 * image_np.shape[1]:
+        continue
+      
+      textAreas.append((x,y,w,h))
  
     if (len(textAreas) == 0):
       return None
@@ -130,18 +138,30 @@ def fish_finder(image_np, threshold=165):
     # sort the text areas by area
     textAreas.sort(key=lambda tup: tup[2]*tup[3], reverse=True)
 
-    for (x,y,w,h) in textAreas:
+    for i, (x,y,w,h) in enumerate(textAreas[:5]):
+      
       # get the text from the image
       crop = invert[y:y+h, x:x+w]
+      region = Image.fromarray(crop)
+
+      # Save the region
+      region.save(f"./test-contour-{i}.jpg")
 
       try:
-        text = pytesseract.image_to_string(Image.fromarray(crop), timeout=0.20, config='--psm 7') # Timeout after half a second , config="--psm 7"
+        text = pytesseract.image_to_string(region, timeout=0.20, config='--psm 7')
         text = text.strip()
         if (text != ""):
           # use the fish pattern to find the fish name
           match = fish_pattern.match(text)
           if match:
             fish_name = match.group('fish_name')
+            
+            # Output the percentage of the the width and height of the image relative to the whole image
+            print(f"width: {w/image_np.shape[1]:.4f}, height: {h/image_np.shape[0]:.4f}")
+            # determine the ratio of non-zero pixels in the filled region
+            r = float(cv2.countNonZero(thresh[y:y+h,x:x+w])) / (w * h)
+            print(r)
+      
             #cv2.imwrite("./test-contour.jpg", crop)
             return fish_name
             
@@ -229,9 +249,9 @@ def main():
   while True:
       try:
         frame = camera.get_latest_frame()
-        #process_frame(frame, action_lock, fish_lock)
-        th = Thread(target = process_frame, args = (frame, action_lock, fish_found_lock, saved_image_lock, stats_lock, args.save_images))
-        th.start()
+        process_frame(frame, action_lock, fish_found_lock, saved_image_lock, stats_lock, args.save_images)
+        #th = Thread(target = process_frame, args = (frame, action_lock, fish_found_lock, saved_image_lock, stats_lock, args.save_images))
+        #th.start()
       except KeyboardInterrupt:
         break
       except Exception as e:

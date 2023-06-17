@@ -3,7 +3,7 @@ Tests image capture via dxcam
 Installation:
 
 ```
-choco install Python3 tesseract
+choco install Python3 tesseract visualstudio2022buildtools
 pip install -r requirements.txt
 ```
 
