@@ -34,7 +34,7 @@ sot_fish = [
 ]
 
 keepers = [
-    "Umber Splashtail",
+    #"Umber Splashtail",
     "Bright Pondie",
     "Raven Islehopper",
     "Bone Ancientscale",
@@ -172,9 +172,9 @@ def fish_finder(image_np, threshold=225, timeout=0.20):
             continue
 
         # if the height is less than 52px or the width is less than 62px, skip it
-        if h / image_np.shape[0] < 0.050:
-            too_small_contours.append(contour)
-            continue
+        # if h / image_np.shape[0] < 0.050:
+        #     too_small_contours.append(contour)
+        #     continue
 
         # if h < 52 or w < 62:
         #     continue
@@ -350,7 +350,7 @@ def main():
         "--screen-left",
         type=float,
         help="percent of the left-side of the screen to exclude",
-        default=0.25,
+        default=0.20,
     )
     parser.add_argument(
         "-T",
@@ -364,7 +364,7 @@ def main():
         "--screen-right",
         type=float,
         help="percent of the right of the screen to exclude",
-        default=0.25,
+        default=0.20,
     )
     parser.add_argument(
         "-B",
