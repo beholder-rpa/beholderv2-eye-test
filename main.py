@@ -172,13 +172,12 @@ def fish_finder(image_np, threshold=235, timeout=0.20):
 
     if len(potential_contours) > 0:
 
-        invert = cv2.bitwise_not(thresh)
-
         for i, contour in enumerate(potential_contours[:3]):
 
             # get the text from the image using the contour
             x, y, w, h = cv2.boundingRect(contour)            
-            crop = invert[y : y + h, x : x + w]
+            crop = thresh[y : y + h, x : x + w]
+            crop = cv2.bitwise_not(crop)
 
             region = Image.fromarray(crop)
 
