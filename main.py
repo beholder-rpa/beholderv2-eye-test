@@ -121,7 +121,10 @@ def fish_finder(image_np, threshold=225, timeout=0.20):
 
     found_fish_name = None
     found_fish_contour = None
-    _, thresh = cv2.threshold(image_np, threshold, 255, 0)
+    #_, thresh = cv2.threshold(image_np, threshold, 255, 0)
+    # perform a color mask instead of a threshold
+    mask = cv2.inRange(image_np, np.array([160, 160, 160], dtype="uint8"), np.array([255, 255, 255], dtype="uint8"))
+    thresh = cv2.bitwise_and(image_np, image_np, mask=mask)
     thresh = cv2.cvtColor(thresh, cv2.COLOR_BGR2GRAY)
 
     # Save the threshold image for debugging
@@ -138,12 +141,18 @@ def fish_finder(image_np, threshold=225, timeout=0.20):
     too_big_contours = []
     invalid_aspect_ratio_contours = []
     too_sparse_contours = []
+    not_tall_enough_contours = []
     found_text = []
 
     all_contours, _ = cv2.findContours(dialate, 1, 2)
-    # sort the  contours by area
-    all_contours = sorted(all_contours, key=cv2.contourArea, reverse=True)
 
+    # sort the contours by distance from the center of the image
+    all_contours = sorted(
+        all_contours,
+        key=lambda c: cv2.pointPolygonTest(c, (image_np.shape[1] / 2, image_np.shape[0] / 2), True),
+        reverse=True,
+    )
+    
     if debug:
         cv2.drawContours(image_np, all_contours, -1, (0, 255, 0), 2)
 
@@ -156,25 +165,25 @@ def fish_finder(image_np, threshold=225, timeout=0.20):
             continue
 
         # if the area is less than 0.75% of the image, skip it
-        if w * h < image_np.shape[0] * image_np.shape[1] * 0.0025:
+        if w * h < image_np.shape[0] * image_np.shape[1] * 0.0020:
             too_small_contours.append(contour)
             continue
 
         # if the aspect ratio is less than 1:2, skip it
-        if w / h < 2:
+        if w / h < 1.25:
             invalid_aspect_ratio_contours.append(contour)
             continue
 
         # determine the ratio of non-zero pixels in the filled region, and skip regions that are too sparse
         r = float(cv2.countNonZero(thresh[y : y + h, x : x + w])) / (w * h)
-        if r > 0.5 or r < 0.05:
+        if r > 0.5 or r < 0.03:
             too_sparse_contours.append(contour)
             continue
 
         # if the height is less than 52px or the width is less than 62px, skip it
-        # if h / image_np.shape[0] < 0.050:
-        #     too_small_contours.append(contour)
-        #     continue
+        if h / image_np.shape[0] < 0.015:
+            too_small_contours.append(contour)
+            continue
 
         # if h < 52 or w < 62:
         #     continue
@@ -203,6 +212,7 @@ def fish_finder(image_np, threshold=225, timeout=0.20):
                         # cv2.imwrite("./test-contour.jpg", crop)
                         found_fish_name = fish_name
                         found_fish_contour = contour
+                        break
 
             except RuntimeError as timeout_error:
                 print(
@@ -227,6 +237,7 @@ def fish_finder(image_np, threshold=225, timeout=0.20):
         cv2.drawContours(image_np, too_big_contours, -1, (0, 0, 255), 2)
         cv2.drawContours(image_np, invalid_aspect_ratio_contours, -1, (255, 0, 255), 2)
         cv2.drawContours(image_np, too_sparse_contours, -1, (220, 0, 220), 2)
+        cv2.drawContours(image_np, not_tall_enough_contours, -1, (0, 100, 100), 2)
         for text, (x, y) in found_text:
             cv2.putText(
                 image_np,
