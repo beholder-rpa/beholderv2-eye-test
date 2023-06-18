@@ -12,3 +12,4 @@ pytesseract
 pillow
 simpleaudio
 pynput
+colorama

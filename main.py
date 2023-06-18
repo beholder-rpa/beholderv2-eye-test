@@ -15,7 +15,9 @@ import random
 import argparse
 from pynput.keyboard import Key, Controller as KeyboardController
 from pynput.mouse import Button, Controller as MouseController
+from colorama import Style, Fore, init as colorama_init
 
+colorama_init()
 SOT_WINDOW_NAME = "Sea of Thieves"
 
 sot_fish = [
@@ -48,6 +50,7 @@ keepers = [
     "Blackcloud Wrecker",
     # "Moon Wrecker",
     "Ancient Stormfish",
+    "Shores Stormfish",
     "Wild Stormfish",
     "Shadow Stormfish",
     "Twilight Stormfish",
@@ -108,7 +111,7 @@ def recast():
     mouse.release(Button.left)
 
 
-def fish_finder(image_np, threshold=235, timeout=0.20):
+def fish_finder(image_np, threshold=105, timeout=0.20):
     # first, resize the image to a width of 1000px
     # scale_percent = 1000 / image_np.shape[1]
     # width = int(image_np.shape[1] * scale_percent)
@@ -117,6 +120,7 @@ def fish_finder(image_np, threshold=235, timeout=0.20):
     # image_np = cv2.resize(image_np, dim, interpolation=cv2.INTER_AREA)
 
     found_fish_name = None
+    found_fish_contour = None
     _, thresh = cv2.threshold(image_np, threshold, 255, 0)
     thresh = cv2.cvtColor(thresh, cv2.COLOR_BGR2GRAY)
 
@@ -133,6 +137,7 @@ def fish_finder(image_np, threshold=235, timeout=0.20):
     too_small_contours = []
     too_big_contours = []
     invalid_aspect_ratio_contours = []
+    too_sparse_contours = []
     found_text = []
 
     all_contours, _ = cv2.findContours(dialate, 1, 2)
@@ -146,24 +151,30 @@ def fish_finder(image_np, threshold=235, timeout=0.20):
         x, y, w, h = cv2.boundingRect(contour)
 
         # if the area is greater than 3% of the image, skip it
-        if (w*h > image_np.shape[0]*image_np.shape[1]*0.03):
-          too_big_contours.append(contour)
-          continue
+        if w * h > image_np.shape[0] * image_np.shape[1] * 0.03:
+            too_big_contours.append(contour)
+            continue
 
         # if the area is less than 0.75% of the image, skip it
-        if (w*h < image_np.shape[0]*image_np.shape[1]*0.0025):
+        if w * h < image_np.shape[0] * image_np.shape[1] * 0.0025:
             too_small_contours.append(contour)
             continue
 
         # if the aspect ratio is less than 1:2, skip it
-        if (w/h < 2):
+        if w / h < 2:
             invalid_aspect_ratio_contours.append(contour)
             continue
 
-        # determine the ratio of non-zero pixels in the filled region
-        # r = float(cv2.countNonZero(thresh[y : y + h, x : x + w])) / (w * h)
-        # if r < 0.1 or r > 0.3:
-        #     continue
+        # determine the ratio of non-zero pixels in the filled region, and skip regions that are too sparse
+        r = float(cv2.countNonZero(thresh[y : y + h, x : x + w])) / (w * h)
+        if r > 0.5 or r < 0.05:
+            too_sparse_contours.append(contour)
+            continue
+
+        # if the height is less than 52px or the width is less than 62px, skip it
+        if h / image_np.shape[0] < 0.050:
+            too_small_contours.append(contour)
+            continue
 
         # if h < 52 or w < 62:
         #     continue
@@ -171,12 +182,10 @@ def fish_finder(image_np, threshold=235, timeout=0.20):
         potential_contours.append(contour)
 
     if len(potential_contours) > 0:
-
         for i, contour in enumerate(potential_contours[:3]):
-
             # get the text from the image using the contour
-            x, y, w, h = cv2.boundingRect(contour)            
-            crop = thresh[y : y + h, x : x + w]
+            x, y, w, h = cv2.boundingRect(contour)
+            crop = image_np[y : y + h, x : x + w]
             crop = cv2.bitwise_not(crop)
 
             region = Image.fromarray(crop)
@@ -191,28 +200,33 @@ def fish_finder(image_np, threshold=235, timeout=0.20):
                     if match:
                         fish_name = match.group("fish_name")
 
-                        # Output the percentage of the the width and height of the image relative to the whole image
-                        if debug:
-                            print(f"width: {w}, height: {h}")
-                            # determine the ratio of non-zero pixels in the filled region
-                            r = float(cv2.countNonZero(thresh[y : y + h, x : x + w])) / (
-                                w * h
-                            )
-                            print(r)
-
                         # cv2.imwrite("./test-contour.jpg", crop)
                         found_fish_name = fish_name
+                        found_fish_contour = contour
 
             except RuntimeError as timeout_error:
-                print("fish_finder: caught exception RuntimeError: " + str(timeout_error))
+                print(
+                    "fish_finder: caught exception RuntimeError: " + str(timeout_error)
+                )
                 # Tesseract processing is terminated
                 pass
 
     if debug:
+        # Output the percentage of the the width and height of the image relative to the whole image
+        if (found_fish_contour is not None) and (found_fish_name is not None):    
+            x, y, w, h = cv2.boundingRect(found_fish_contour)
+            print(
+                f"\twidth: {w}, height: {h}({w/image_np.shape[1]}, {h/image_np.shape[0]})"
+            )
+            # determine the ratio of non-zero pixels in the filled region
+            r = float(cv2.countNonZero(thresh[y : y + h, x : x + w])) / (w * h)
+            print(f"\t{r}")
+
         cv2.drawContours(image_np, potential_contours, -1, (255, 255, 0), 2)
         cv2.drawContours(image_np, too_small_contours, -1, (0, 255, 255), 2)
         cv2.drawContours(image_np, too_big_contours, -1, (0, 0, 255), 2)
         cv2.drawContours(image_np, invalid_aspect_ratio_contours, -1, (255, 0, 255), 2)
+        cv2.drawContours(image_np, too_sparse_contours, -1, (220, 0, 220), 2)
         for text, (x, y) in found_text:
             cv2.putText(
                 image_np,
@@ -235,10 +249,9 @@ def fish_finder(image_np, threshold=235, timeout=0.20):
                 2,
                 cv2.LINE_AA,
             )
-            
 
         cv2.imwrite("./debug.jpg", image_np)
-    
+
     return found_fish_name
 
 
@@ -267,7 +280,7 @@ def process_frame(
             last_found_time == None
             or (current_time - last_found_time).total_seconds() > 8
         ):
-            print(fish_name)
+            print(f"{Fore.LIGHTCYAN_EX}Found {fish_name}{Style.RESET_ALL}")
 
             # double-check lock pattern
             if last_found_time == None or last_found_time < current_time:
@@ -333,18 +346,32 @@ def main():
     )
     parser.add_argument("-f", "--target-fps", type=int, help="target fps", default=4)
     parser.add_argument(
-        "-H",
-        "--height",
+        "-L",
+        "--screen-left",
         type=float,
-        help="focus region percent of screen height",
+        help="percent of the left-side of the screen to exclude",
+        default=0.25,
+    )
+    parser.add_argument(
+        "-T",
+        "--screen-top",
+        type=float,
+        help="percent of the top of the screen to exclude",
         default=0.45,
     )
     parser.add_argument(
-        "-W",
-        "--width",
+        "-R",
+        "--screen-right",
         type=float,
-        help="focus region percent of screen width",
-        default=0.20,
+        help="percent of the right of the screen to exclude",
+        default=0.25,
+    )
+    parser.add_argument(
+        "-B",
+        "--screen-bottom",
+        type=float,
+        help="percent of the bottom of the screen to exclude",
+        default=0.05,
     )
     parser.add_argument("-n", "--no-error-sound", action="store_true")
     parser.add_argument("-d", "--debug", action="store_true")
@@ -360,25 +387,30 @@ def main():
     camera = dxcam.create(output_idx=0, output_color="BGR")
 
     resolution = camera._output.resolution
-    left, top = math.floor(resolution[0] * args.width), math.floor(
-        resolution[1] * args.height
+    left, top = math.floor(resolution[0] * args.screen_left), math.floor(
+        resolution[1] * args.screen_top
     )
-    right, bottom = resolution[0] - left, resolution[1]
+    right, bottom = resolution[0] - math.floor(
+        resolution[0] * args.screen_right
+    ), resolution[1] - math.floor(resolution[1] * args.screen_bottom)
     region = (left, top, right, bottom)
-    print(region)
 
     camera.start(target_fps=args.target_fps, region=region, video_mode=False)
 
+    print(f"{Fore.LIGHTMAGENTA_EX}Starting fishing bot...{Style.RESET_ALL}")
     print(
-        f"Target FPS: {args.target_fps} ({60/args.target_fps/60:.2f} seconds per frame)  "
+        f"\t{Fore.LIGHTYELLOW_EX}Target FPS: {args.target_fps} ({60/args.target_fps/60:.2f} seconds per frame){Style.RESET_ALL}"
     )
+    print(f"\t{Fore.LIGHTYELLOW_EX}Screen focus region: {region}{Style.RESET_ALL}")
     if args.save_images:
-        print("Saving images of fish caught")
+        print(f"\t{Fore.LIGHTGREEN_EX}Saving images of fish caught{Style.RESET_ALL}")
     if args.no_error_sound:
-        print("Suppressing error sound when a fish is rejected")
+        print(
+            f"\t{Fore.LIGHTGREEN_EX}Suppressing error sound when a fish is rejected{Style.RESET_ALL}"
+        )
     if args.debug:
-        print("Debugging mode enabled")
-    print("Press Ctrl+C to exit...")
+        print(f"\t{Fore.LIGHTGREEN_EX}Debugging mode enabled{Style.RESET_ALL}")
+    print(f"Press Ctrl+C to exit...")
 
     while True:
         try:
