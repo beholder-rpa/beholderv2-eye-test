@@ -111,7 +111,7 @@ def recast():
     mouse.release(Button.left)
 
 
-def fish_finder(image_np, threshold=105, timeout=0.20):
+def fish_finder(image_np, threshold=225, timeout=0.20):
     # first, resize the image to a width of 1000px
     # scale_percent = 1000 / image_np.shape[1]
     # width = int(image_np.shape[1] * scale_percent)
