@@ -16,6 +16,8 @@ import argparse
 from pynput.keyboard import Key, Controller as KeyboardController
 from pynput.mouse import Button, Controller as MouseController
 from colorama import Style, Fore, init as colorama_init
+import concurrent.futures
+
 
 colorama_init()
 SOT_WINDOW_NAME = "Sea of Thieves"
@@ -110,6 +112,31 @@ def recast():
     sleep(delay)
     mouse.release(Button.left)
 
+def process_contour(image_np, contour, timeout=0.20):
+
+    x, y, w, h = cv2.boundingRect(contour)
+    crop = image_np[y : y + h, x : x + w]
+    crop = cv2.bitwise_not(crop)
+
+    region = Image.fromarray(crop)
+
+    try:
+        text = pytesseract.image_to_string(region, timeout=timeout, config="--psm 7")  # type: ignore
+        text = text.strip()
+        found_text = (text, (x, y))
+        if text != "":
+            # use the fish pattern to find the fish name
+            match = fish_pattern.match(text)
+            if match:
+                fish_name = match.group("fish_name")
+                return (contour, fish_name, found_text)
+        return (contour, None, found_text)
+
+    except RuntimeError as timeout_error:
+        print("find_fish: caught exception RuntimeError: " + str(timeout_error))
+        # Tesseract processing is terminated
+        pass
+
 
 def fish_finder(image_np, threshold=225, timeout=0.20):
     # first, resize the image to a width of 1000px
@@ -123,13 +150,11 @@ def fish_finder(image_np, threshold=225, timeout=0.20):
     found_fish_contour = None
     #_, thresh = cv2.threshold(image_np, threshold, 255, 0)
     # perform a color mask instead of a threshold
-    mask = cv2.inRange(image_np, np.array([160, 160, 160], dtype="uint8"), np.array([255, 255, 255], dtype="uint8"))
-    thresh = cv2.bitwise_and(image_np, image_np, mask=mask)
-    thresh = cv2.cvtColor(thresh, cv2.COLOR_BGR2GRAY)
+    thresh = cv2.inRange(image_np, np.array([240, 240, 240], dtype="uint8"), np.array([255, 255, 255], dtype="uint8"))
 
     # Save the threshold image for debugging
     if debug:
-        cv2.imwrite("./test-threshold.jpg", thresh)
+        cv2.imwrite("./debug-threshold.jpg", thresh)
 
     # dialate the image to find clusters of pixels
     kernel_size = int(min(image_np.shape[:2]) * 0.025)
@@ -170,55 +195,26 @@ def fish_finder(image_np, threshold=225, timeout=0.20):
             continue
 
         # if the aspect ratio is less than 1:2, skip it
-        if w / h < 1.25:
+        if w / h < 2:
             invalid_aspect_ratio_contours.append(contour)
             continue
-
-        # determine the ratio of non-zero pixels in the filled region, and skip regions that are too sparse
-        r = float(cv2.countNonZero(thresh[y : y + h, x : x + w])) / (w * h)
-        if r > 0.5 or r < 0.03:
-            too_sparse_contours.append(contour)
-            continue
-
-        # if the height is less than 52px or the width is less than 62px, skip it
-        if h / image_np.shape[0] < 0.015:
-            too_small_contours.append(contour)
-            continue
-
-        # if h < 52 or w < 62:
-        #     continue
 
         potential_contours.append(contour)
 
     if len(potential_contours) > 0:
-        for i, contour in enumerate(potential_contours[:3]):
-            # get the text from the image using the contour
-            x, y, w, h = cv2.boundingRect(contour)
-            crop = image_np[y : y + h, x : x + w]
-            crop = cv2.bitwise_not(crop)
 
-            region = Image.fromarray(crop)
+         with concurrent.futures.ThreadPoolExecutor() as executor:
+            futures = []
+            for contour in potential_contours[:3]:
+                future = executor.submit(process_contour, image_np, contour, timeout=timeout)
+                futures.append(future)
 
-            try:
-                text = pytesseract.image_to_string(region, timeout=timeout, config="--psm 7")  # type: ignore
-                text = text.strip()
-                found_text.append((text, (x, y)))
-                if text != "":
-                    # use the fish pattern to find the fish name
-                    match = fish_pattern.match(text)
-                    if match:
-                        fish_name = match.group("fish_name")
-
-                        # cv2.imwrite("./test-contour.jpg", crop)
-                        found_fish_name = fish_name
-                        found_fish_contour = contour
-                        break
-
-            except RuntimeError as timeout_error:
-                print(
-                    "fish_finder: caught exception RuntimeError: " + str(timeout_error)
-                )
-                # Tesseract processing is terminated
+            for future in concurrent.futures.as_completed(futures):
+                contour, fish_name, text = future.result()
+                found_text.append(text)
+                if fish_name is not None:
+                    found_fish_name = fish_name
+                    found_fish_contour = contour
                 pass
 
     if debug:
@@ -355,7 +351,7 @@ def main():
     parser.add_argument(
         "-s", "--save-images", help="save images of fish caught", action="store_true"
     )
-    parser.add_argument("-f", "--target-fps", type=int, help="target fps", default=4)
+    parser.add_argument("-f", "--target-fps", type=int, help="target fps", default=6)
     parser.add_argument(
         "-L",
         "--screen-left",
@@ -368,7 +364,7 @@ def main():
         "--screen-top",
         type=float,
         help="percent of the top of the screen to exclude",
-        default=0.45,
+        default=0.40,
     )
     parser.add_argument(
         "-R",
